@@ -1,0 +1,242 @@
+package com.example.tanya.geoquiz;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class QuizActivity extends AppCompatActivity {
+
+    private Button mTrueButton, mFalseButton, mCheatButton;
+    private ImageButton mNextButton, mPrevButton;
+    private TextView mQuestionTextView, mCountCheatTextView;
+    private Question[] mQuestionBank = new Question[]{
+            new Question(R.string.question_australia, true),
+            new Question(R.string.question_oceans, true),
+            new Question(R.string.question_mideast, false),
+            new Question(R.string.question_africa, false),
+            new Question(R.string.question_americas, true),
+            new Question(R.string.question_asia, true),
+    };
+
+    private int mCurrentIndex = 0, mCountTrueAnswer = 0, mCountCheat = 0;
+    private boolean mIsCheater;
+    private String mCountCheatStr = "Count cheat: ";
+    private static final String TAG = "QuizActivity";
+    private static final String KEY_INDEX = "index";
+    private static final int REQUEST_CODE_CHEAT = 0;
+    private static final String COUNT_CHEAT = "Count_cheat";
+
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        //Логирование
+        Log.d(TAG, "onCreate(Bunde) called");
+        setContentView(R.layout.activity_quiz);
+
+        if(savedInstanceState != null){
+            //для восстановления активности на текущем вопросе
+            mCurrentIndex = savedInstanceState.getInt(KEY_INDEX, 0);
+            mCountCheat = savedInstanceState.getInt(COUNT_CHEAT, 0);
+            //для читеров
+            mIsCheater = savedInstanceState.getBoolean(KEY_INDEX);
+            if(mIsCheater){
+                mQuestionBank[mCurrentIndex].setCheater(true);
+                mCountCheat ++;
+                if(mCountCheat > 3) mCheatButton.setEnabled(false);
+            }
+        }
+
+        //получение ссылок на виджеты
+        mTrueButton = (Button) findViewById(R.id.true_button);
+        mFalseButton = (Button) findViewById(R.id.false_button);
+        mQuestionTextView = (TextView) findViewById(R.id.question_text_view);
+        mNextButton = (ImageButton) findViewById(R.id.next_button);
+        mPrevButton = (ImageButton) findViewById(R.id.prev_button);
+        mCheatButton = (Button) findViewById(R.id.cheat_button);
+        mCountCheatTextView = (TextView) findViewById(R.id.count_cheat);
+        updateQuestion(mCurrentIndex, mCurrentIndex);
+
+
+        String str = mCountCheatStr + (3 - mCountCheat) + "";
+        mCountCheatTextView.setText(str);
+
+        //назначить слушателей
+        mTrueButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                checkAnswer(true);
+                mTrueButton.setEnabled(false);
+            }
+        });
+
+        mFalseButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+               checkAnswer(false);
+                mFalseButton.setEnabled(false);
+            }
+        });
+
+        mNextButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                int mNextIndex = (mCurrentIndex + 1) % mQuestionBank.length;
+                updateQuestion(mCurrentIndex, mNextIndex);
+                mCurrentIndex = mNextIndex;
+                mIsCheater = false;
+                mTrueButton.setEnabled(true);
+                mFalseButton.setEnabled(true);
+            }
+        });
+
+        mQuestionTextView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                int mNextIndex = (mCurrentIndex + 1) % mQuestionBank.length;
+                updateQuestion(mCurrentIndex, mNextIndex);
+                mCurrentIndex = mNextIndex;
+            }
+        });
+
+        mPrevButton.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View view){
+                int mNextIndex = (mCurrentIndex - 1);
+                if (mNextIndex < 0) mNextIndex = mQuestionBank.length - 1;
+                updateQuestion(mCurrentIndex, mNextIndex);
+                mCurrentIndex = mNextIndex;
+                mIsCheater = false;
+                mTrueButton.setEnabled(true);
+                mFalseButton.setEnabled(true);
+
+            }
+        });
+
+        mCheatButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                boolean answerIsTrue = mQuestionBank[mCurrentIndex].isAnswerTrue();
+                Intent intent = CheatActivity.newIntent(QuizActivity.this, answerIsTrue);
+                startActivityForResult(intent, REQUEST_CODE_CHEAT);
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data){
+        if(resultCode != Activity.RESULT_OK) return;
+        if(requestCode == REQUEST_CODE_CHEAT){
+            if(data == null) return;
+            mIsCheater = CheatActivity.wasAnswerShow(data);
+        }
+
+    }
+
+    private void updateQuestion(int mCurIndex, int mNextIndex){
+        if(mIsCheater){
+            mQuestionBank[mCurIndex].setCheater(true);
+            String str = mCountCheatStr + (3 - mCountCheat) + "";
+            mCountCheatTextView.setText(str);
+           // mCountCheatTextView.setText(mCountCheatStr + mCountCheat);
+            //if(mCountCheat > 3) mCheatButton.setEnabled(false);
+
+        }
+        int question = mQuestionBank[mNextIndex].getTextResId();
+        mQuestionTextView.setText(question);
+
+    }
+
+    private void checkAnswer(boolean userPressedTrue){
+        boolean answerIsTrue = mQuestionBank[mCurrentIndex].isAnswerTrue();
+        int messageResId = 0;
+
+        if(mIsCheater || mQuestionBank[mCurrentIndex].isCheater()){
+            messageResId = R.string.judgment_toast;
+            mNextButton.setEnabled(true);
+            mPrevButton.setEnabled(true);
+        } else{
+            if(userPressedTrue == answerIsTrue){
+                messageResId = R.string.correct_toast;
+                if(!mQuestionBank[mCurrentIndex].isAnswered()) mCountTrueAnswer ++;
+            }
+            else messageResId = R.string.incorrest_toast;
+        }
+
+
+        mQuestionBank[mCurrentIndex].setIsAnswered(true);
+        Toast.makeText(this,
+                messageResId,
+                Toast.LENGTH_SHORT).show();
+
+        if(isAllAnswered()){
+            Toast.makeText(this,
+                    "" + calcPercent() + "%",
+                     Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private double calcPercent(){
+        Log.d(TAG, "" + 100.0 * mCountTrueAnswer / mQuestionBank.length);
+        return 100.0 * mCountTrueAnswer / mQuestionBank.length;
+    }
+
+    private boolean isAllAnswered(){
+        for(int i = 0; i<mQuestionBank.length; ++i){
+            if(!mQuestionBank[i].isAnswered()) return false;
+        }
+        return true;
+
+    }
+
+
+    @Override
+    public void onSaveInstanceState(Bundle savedInstanceState){
+        super.onSaveInstanceState(savedInstanceState);
+        Log.i(TAG, "onSaveInstanceState");
+        //сохраняемое значение - пара ключ значение
+        savedInstanceState.putInt(KEY_INDEX, mCurrentIndex);
+        savedInstanceState.putBoolean(KEY_INDEX, mIsCheater);
+        savedInstanceState.putInt(COUNT_CHEAT, mCountCheat);
+
+    }
+
+    @Override
+    public void onStart(){
+        super.onStart();
+        Log.d(TAG, "onStart() called");
+    }
+
+    @Override
+    public void onPause(){
+        super.onPause();
+        Log.d(TAG, "onPause() called");
+    }
+
+    @Override
+    public void onStop(){
+        super.onStop();
+        Log.d(TAG, "onStop() called");
+    }
+
+    @Override
+    public void onDestroy(){
+        super.onDestroy();
+        Log.d(TAG, "onDestroy() called");
+    }
+
+    @Override
+    public void onResume(){
+        super.onResume();
+        Log.d(TAG, "onResume() called");
+    }
+
+}
